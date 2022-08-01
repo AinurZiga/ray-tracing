@@ -10,6 +10,7 @@ import sys
 import timeit
 import operator
 import values5 as values
+import rt
 import math
 import local_eng as local
 
@@ -1760,23 +1761,6 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.image_item.hide()
         return
 
-    def mimo_rates_old(self):
-        # рассчитать матрицы в каждой точке
-        # тепловая карта
-        from numpy.linalg import eig
-        #import numpy as np
-
-        p_BS = [54.0, 35.0, 3.0]
-        self.draw_p(p_BS)
-        N0 = 10**(-93/20)
-        P = 10**(49/20)/3
-        for i in range(3): #(len(self.analyse_points)):
-            p1 = self.analyse_points[i]
-            H = values.mimo_channel_matrix(p1, p_BS, self.walls_list)
-            H = np.array(H)
-            eig_values, _ = eig(np.dot(H, np.conj(H).T))
-            eig_values = eig_values.real
-            print(i, eig_values/np.max(eig_values), np.max(eig_values))
 
     def load_rates(self):
         with open('rates_rig1.npy', 'rb') as f:
@@ -1820,7 +1804,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         return x**2
     """
 
-    def fun(self, f, q_in, q_out):
+    """def fun(self, f, q_in, q_out):
         while True:
             i, x = q_in.get()
             if i is None:
@@ -1846,9 +1830,9 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
         [p.join() for p in proc]
 
-        return [x for i, x in sorted(res)]
+        return [x for i, x in sorted(res)]"""
 
-    def mimo_rates_help(self, p1):
+    """    def mimo_rates_help(self, p1):
         p1 = list(p1)
         p1[2] = 1.0
         fc = 5.6 * 10**9
@@ -1888,7 +1872,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         p_rates += value4,
         p_rates += value5,  # make sense for rt_rig
         p_rates += value6,
-        return p_rates
+        return p_rates"""
 
     def mimo_rates(self):
         # рассчитать матрицы в каждой точке
@@ -1910,72 +1894,14 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #rates = []
         #threads = 2
         rates = []
-        rates += self.parmap(self.mimo_rates_help, self.analyse_points[:20])
+        #rates += self.parmap(self.mimo_rates_help, self.analyse_points[:20])
 
-        #for i in range(10//threads + 1):#(len(self.analyse_points)):
-        #    with Pool(threads) as pool:
-        #        p_list = []
-        #        for j in range(threads):
-        #            p_list.append(list(self.analyse_points[2*i+j]))
-        #            p_list[-1][2] = 1.0
-                #p1_1 = list(self.analyse_points[2*i])
-                #H_list = pool.map(self.mimo_rates_help, p_list)
-        #    H_list = pool.map(self.foo, [1,2,3])
-        #    return
-            
-
-            #p1 = list(self.analyse_points[i])
-            #p1[2] = 1.0
-            #cr_points, cf_faces, d_faces = values.ray_tracing(p1, p_BS, self.walls_list)
-            #H = values.mimo_channel_matrix(p1, p_BS, self.walls_list, 
-            #            n_walls, faces, segments, DRs, face_ps, face_vs)
-            #H = values.mimo_channel_matrix(p1, p_BS, self.walls_list, 
-            #            n_walls, faces, segments, DRs, face_ps, face_vs, fc)
-        """for i,H in enumerate(H_list):
-                try:
-                    #H = H * 10**(119/20)
-                    H = H * lamda / (4*np.pi) * 10**(119/20)
-                    eig_values, _ = eig(np.dot(H, np.conj(H).T))
-                    eig_values = eig_values.real
-                    eig_values = np.sort(eig_values)[::-1]
-                    rates.append([])
-                    #rates[-1] += p1[:2]
-                    rates += p_list[i][:2]
-                    value1 = np.sum(eig_values/np.max(eig_values) > 0.05)
-                    value2 = np.sum(np.log2(1 + eig_values/3))
-                    #value2 = np.sum(np.log2(1 + P*eig_values/N0/3))
-                    value5 = np.log2(1 + np.abs(H[1,1])**2)
-                    value6 = np.sum(eig_values) / np.min(eig_values)  # Demmel
-                    if value6 > 10**4:
-                        value6 = 10**4
-                    gammas = self.waterpouring(3, H)
-                    print(gammas)
-                    value4 = np.sum(np.log2(1 + gammas*eig_values/3))
-                    #value4 = np.sum(np.log2(1 + gammas*P*eig_values/N0/3))
-                    value3 = np.sum(gammas > 0.01)
-                except:
-                    print(H)
-                    rates.append([])
-                    rates[-1] += p1[:2]
-                    value1 = 1
-                    value2 = 1
-                    value3 = 1
-                    value4 = 1
-                    value5 = 1
-                    value6 = 10**4
-                rates[-1] += value1,
-                rates[-1] += value2,
-                rates[-1] += value3,
-                rates[-1] += value4,
-                rates[-1] += value5,  # make sense for rt_rig
-                rates[-1] += value6,
-                print(i, eig_values/np.max(eig_values), np.max(eig_values), value1, 
-                            value2, value3, value4, value5, value6)"""
+        ray_tracing = rt.Ray_tracing(p_BS, self.walls_list, 
+                self.n_walls, self.faces, self.segments, 
+                self.DRs, self.face_ps, self.face_vs, fc)
+        
+        rates += rt.parmap(ray_tracing.mimo_rates_help, self.analyse_points[:20])
         rates = np.array(rates, dtype=np.float64)
-        #with open('rates_hyb2.npy', 'wb') as f:
-        #with open('rates_rig1.npy', 'wb') as f:
-        #    np.save(f, rates)
-        #print("rates:", rates)
         self.max_par = max(rates, key = operator.itemgetter(2))
         self.max_par = self.max_par[2]
         self.min_par = min(rates, key = operator.itemgetter(2))
@@ -1990,8 +1916,6 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.draw_p(p_BS)
 
 
-
-
     def task1(self, filename):  # open map
         print('task1')
         #self.mode = 'task1'
@@ -2001,9 +1925,6 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.vesx = 30
         self.vesy = 30
 
-        #self.sh1 = 0.3*self.vesy*self.step       # Recalculate if  self.step changes
-        #self.sh2 = 0.3*self.vesx*self.step
-        #self.walls_list = values.get_map_objects()
         self.analyse_points, self.walls_list = values.open_file(filename)
         #self.walls_list = [self.walls_list[25]]
         print('walls:', len(self.walls_list))
@@ -2105,7 +2026,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
     def frob(self, H):
         return(np.sum(np.sum(np.abs(H)**2)))
 
-    def waterpouring(self, Mt, H_chan):
+    """def waterpouring(self, Mt, H_chan):
         #SNR = 10**(SNR_dB/10)
         #H_norm = H / np.sqrt(frob(H)/9)
         #SNR = np.sqrt(self.frob(H_chan)/9)
@@ -2134,37 +2055,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         res = []
         for gamma in gammas:
             res.append(float(gamma))
-        return np.array(res)
-
-    def waterpouring_old(self, Mt, H_chan):
-        #SNR = 10**(SNR_dB/10)
-        #H_norm = H / np.sqrt(frob(H)/9)
-        SNR = np.sqrt(self.frob(H_chan)/9)
-        SNR = np.sqrt(np.var(H_chan))
-        H_chan = np.array(H_chan) / SNR
-        r = np.linalg.matrix_rank(H_chan)
-        H_sq = np.dot(H_chan,np.matrix(H_chan, dtype=complex).H)
-        lambdas = np.linalg.eigvals(H_sq) 
-        lambdas = np.sort(lambdas)[::-1]
-        print("var:", np.var(H_chan), SNR, lambdas)
-        p = 1
-        gammas = np.zeros((r,1))
-        flag = True
-        while flag == True:
-            lambdas_r_p_1 = lambdas[0:(r-p+1)]
-            inv_lambdas_sum =  np.sum(1/lambdas_r_p_1)
-            mu = ( Mt / (r - p + 1) ) * ( 1 + (1/SNR) * inv_lambdas_sum)
-            for idx, item in enumerate(lambdas_r_p_1):
-                gammas[idx] = mu - (Mt/(SNR*item))
-            if gammas[r-p] < 0: #due to Python starts from 0
-                gammas[r-p] = 0 #due to Python starts from 0
-                p = p + 1
-            else:
-                flag = False
-        res = []
-        for gamma in gammas:
-            res.append(float(gamma))
-        return np.array(res)
+        return np.array(res)"""
 
     """
     def extract_data(self, filename):
