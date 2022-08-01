@@ -32,11 +32,11 @@ import functions
 
 
 class Ray_tracing:
-    def __init__(self, p_BS, walls_list, 
+    def __init__(self, p_BS, walls, 
                 n_walls, facets, segments, 
                 DRs, facet_ps, facet_vs, fc) -> None:
         self.p_BS = p_BS
-        self.walls_list = walls_list
+        self.walls = walls
         self.n_walls = n_walls
         self.facets = facets
         self.segments = segments 
@@ -49,14 +49,12 @@ class Ray_tracing:
     def mimo_rates_help(self, p1):
         p1 = list(p1)
         p1[2] = 1.0
-        fc = 5.6 * 10**9
+        #fc = 5.6 * 10**9
         c = 3 * 10**8
-        lamda = c / fc
-        p_BS = [54.0, 35.0, 2.5]
+        lamda = c / self.fc
+        #p_BS = [54.0, 35.0, 2.5]
         p_rates = []
-        H = values.mimo_channel_matrix(p1, p_BS, self.walls_list, 
-                    self.n_walls, self.facets, self.segments, 
-                    self.DRs, self.facet_ps, self.facet_vs, fc)
+        H = self.mimo_channel_matrix_rigorous(self.p_BS, p1)
         try:
             H = H * lamda / (4*np.pi) * 10**(119/20)
             eig_values, _ = np.linalg.eig(np.dot(H, np.conj(H).T))
@@ -88,7 +86,7 @@ class Ray_tracing:
         p_rates += value6,
         return p_rates
 
-    def mimo_channel_matrix(self):
+    def mimo_channel_matrix_rigorous(self, p1, p2):
         # вернуть полную канальную матрицу
         #global p1, p2
         #shift = 82/1000
@@ -99,12 +97,97 @@ class Ray_tracing:
         #print("crossings:", len(cr_points))
         #H = step_3(p1, p2, cr_points, cr_faces, d_faces, walls, n_walls, 
         #                    faces, segments, DRs, face_ps, face_vs, fc)
-        cr_points, cr_facets, d_facets = self.image_method()
-        pass
-        #return H
+        shift = 82/1000
+        H = np.zeros((3,3), dtype=np.complex128)
+        for i in range(3):
+            for j in range(3):
+                p1_ij = list(p1)
+                p1_ij[0] += shift * (i - 1)
+                p2_ij = list(p2)
+                p2_ij[0] += shift * (j - 1)
+                cr_points, cr_faces, d_facets = self.image_method(p1_ij, p2_ij)
+                #print(i, j, len(cr_points))
+                if i == j == 1:
+                    print("reflections:", len(cr_points))
+                H[i][j] = self.calc_amplitudes(p1, p2, cr_points, d_facets)
+        #cr_points, cr_facets, d_facets = self.image_method(p1, p2)
+        return H
+
+    def calc_amplitudes(self, p1, p2, cr_points, d_facets):
+        c = 3*10**8
+        lamda = c / self.fc
+        #k = 2*3.14 / lamda
+        eta_brick = 3.75 - 1j * (17.98 * 0.038 / 5.6)
+        eta_wood = 1.99 - 1j * (17.98 * 0.0047 * 5.6**1.0718 / 5.6)
+        #Ampl = 2*lamda / (4*np.pi)  # + antenna gain
+        Ampl = 2  # + antenna gain
+        #eta = eta_brick
+
+
+
+        D_direct = functions.vec_len(p1, p2)
+        ray0 = Ampl * np.exp(-2j*np.pi*self.fc*D_direct/c) / D_direct
+        facets_d_theta = self.d_crossing_wall(p1, p2)
+        for i in range(facets_d_theta.shape[1]):
+            facet_d = facets_d_theta[0, i]
+            facet_theta = facets_d_theta[1, i]
+            #eta = 3.75 - 1j * (17.98 * 0.038 / 5.6)   # brick
+            eta = eta_brick
+            q = 6.28*self.facet_d/lamda * np.sqrt(eta - np.sin(facet_theta)**2)
+            tmp1 = np.cos(facet_theta) - np.sqrt(facet_theta - np.sin(facet_theta)**2)
+            tmp2 = np.cos(facet_theta) + np.sqrt(facet_theta - np.sin(facet_theta)**2)
+            R_prime = tmp1 / tmp2
+            tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
+            tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
+            T = tmp3 / tmp2
+            ray0 = ray0 * T
+        rays = ray0
+
+        for i, point in enumerate(cr_points):
+            d = d_facets[i]
+            tmp1 = sum([(p1[i] - point[i])*(p2[i] - point[i]) for i in range(3)])
+            tmp2 = functions.vec_len(p1, point) * functions.vec_len(p2, point)
+            theta = np.arccos(tmp1 / tmp2) /2
+            if i < len(cr_points)-2:
+                # vertical, TE, brick
+                eta = eta_brick
+                q = 6.28*d/lamda * np.sqrt(eta - np.sin(theta)**2)
+                tmp1 = np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
+                tmp2 = np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
+                R_prime = tmp1 / tmp2
+            else:
+                eta = eta_wood
+                q = 6.28*d/lamda * np.sqrt(eta - np.sin(theta)**2)
+                tmp1 = eta*np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
+                tmp2 = eta*np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
+                R_prime = tmp1 / tmp2
+            tmp1 = R_prime*(1-np.exp(-2j*q))
+            tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
+            R = tmp1 / tmp2
+            D = functions.vec_len(p1, point) + functions.vec_len(p2, point)
+            tau = D / c
+            ray = Ampl * R * np.exp(-2j*np.pi*self.fc*tau) / D
+            C1 = [point[j] - (point[j] - p1[j])*0.001 for j in range(3)]
+            C2 = [point[j] - (point[j] - p2[j])*0.001 for j in range(3)]
+            facets_d_theta1 = self.d_crossing_wall(p1, C1)
+            facets_d_theta2 = self.d_crossing_wall(p2, C2)
+            facets_d_theta = np.hstack((facets_d_theta1, facets_d_theta2))
+            for i in range(facets_d_theta.shape[1]):  # crossings through wall
+                #eta = 3.75 - 1j * (17.98 * 0.038 / 5.6)   # brick
+                eta = eta_brick
+                facet_d = facets_d_theta[0, i]
+                facet_theta = facets_d_theta[1, i]
+                q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(facet_theta)**2)
+                tmp1 = np.cos(facet_theta) - np.sqrt(facet_theta - np.sin(facet_theta)**2)
+                tmp2 = np.cos(facet_theta) + np.sqrt(facet_theta - np.sin(facet_theta)**2)
+                R_prime = tmp1 / tmp2
+                tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
+                tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
+                T = tmp3 / tmp2
+                ray = ray * T        
+            rays += ray
+        return rays
     
-    #def case1(p1, p2, walls, n_walls, faces, segments, DRs: np.array([[]]),
-    #            face_ps: np.array([[]]), face_vs: np.array([[]])):
     def image_method(self, p1, p2):
         """ Calculating reflected rays """
         cr_points = []
@@ -194,7 +277,11 @@ class Ray_tracing:
             return C
         return None
 
-    @nb.njit(cache=True)
+    def d_crossing_wall(self, p1, p2):
+        return functions.d_crossing_wall(p1, p2, self.n_walls, self.facets, self.segments, 
+                np.array(self.DRs), np.array(self.facet_ps), np.array(self.facet_vs))
+
+    """@nb.njit(cache=True)
     def d_crossing_wall(self, p1, p2):
         cr_walls = 0
         #faces_d = []
@@ -277,7 +364,76 @@ class Ray_tracing:
         #res[1, :] = np.array(faces_theta)
         #res[0, :] = faces_d
         #res[1, :] = faces_theta
-        return res
+        return res"""
+
+    def crossing_wall(self, p1, p2):
+        return functions.crossing_wall(p1, p2, self.n_walls, self.facets, self.segments, 
+                np.array(self.DRs), np.array(self.facet_ps), np.array(self.facet_vs))
+
+    """@nb.njit(cache=True)
+    def crossing_wall(self, p1, p2):
+        cr_walls = 0
+        #pool_cr_points = np.array([])
+        #pool_cr_points = None
+        for i in range(self.n_walls):  # walls
+            first_interaction = False
+            for j in range(self.facets[i+1]-self.facets[i]):  # faces
+                ind = self.facets[i] + j
+                DR = self.DRs[ind]
+                D0 = (DR[0] * self.facet_ps[self.segments[ind]][0] + DR[1] * self.face_ps[self.segments[ind]][1]
+                        + DR[2] * self.face_ps[self.segments[ind]][2])
+                tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - self.DRs[ind][2] * p1[2]
+                tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
+                if tmp2 == 0:
+                    continue
+                t0 = tmp1 / tmp2
+                crossing_p = [0.0] * 3
+                for k in range(3):
+                    crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
+                if functions.skal(crossing_p, p1, p2) > 0:
+                    continue
+                if functions.is_point_inside_figure(crossing_p, DR, 
+                                    self.facet_ps[self.segments[ind]:self.segments[ind + 1], :], 
+                                    self.facet_vs[self.segments[ind]:self.segments[ind + 1], :]):
+                    #if is_pr:
+                    #    print('crossing point:', crossing_p)
+                    #crossing_p = np.array(crossing_p)
+                    if not cr_walls:
+                        #pool = np.array(crossing_p, dtype=np.float64)
+                        pool = np.zeros((2, 3))
+                        pool[0,:] = np.array(crossing_p)
+                        pool[1,:] = np.array(crossing_p)
+                        #pool = np.vstack((np.array(crossing_p), np.array(crossing_p)))
+                        cr_walls += 1
+                        break
+                        #if not first_interaction:
+                        #    first_interaction = True
+                        #else:
+                        #    cr_walls += 1
+                        #    break
+                    elif not functions.check(pool, np.array(crossing_p)):
+                        #old_pool = np.array(pool, dtype=np.float64)
+                        old_pool = pool[:, :]
+                        pool = np.empty((old_pool.shape[0] + 1, old_pool.shape[1]))
+                        pool[:-1, :] = old_pool
+                        pool[-1,:] = np.array(crossing_p)
+                        #print(crossing_p)
+                        #pool = np.vstack((pool, np.array(crossing_p)))
+                        cr_walls += 1
+                        break
+                        #if not first_interaction:
+                        #    first_interaction = True
+                        #else:
+                        #    cr_walls += 1
+                        #    break
+                    
+                    #if pool_cr_points and crossing_p not in pool_cr_points:
+                    #    if not pool_cr_points:
+                    #        pool_cr_points = np.array(crossing_p)
+                    #    else:
+                    #        pool_cr_points = np.vstack((pool_cr_points, np.array(crossing_p)))
+                    #    cr_walls += 1
+        return cr_walls"""
 
     #@nb.njit(cache=True)
     def is_crossing_wall(self, p1, p2):
