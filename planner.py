@@ -864,7 +864,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
         ray_tracing = rt.Ray_tracing(p_BS, self.walls_list, 
                 self.n_walls, self.faces, self.segments, 
-                self.DRs, self.face_ps, self.face_vs, fc)
+                self.DRs, self.face_ps, self.face_vs, fc,
+                'image', 'rigorous')
         
         rates += rt.parmap(ray_tracing.mimo_rates_help, self.analyse_points[:20])
         rates = np.array(rates, dtype=np.float64)
@@ -909,8 +910,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [48.0, 15.0, 1.0]   # rts1
         #p2 = [53.0, 36.0, 1.0]
 
-        p1 = [53.4, 39.35, 1.85]   # holl  (case 1)
-        p2 = [53.0, 44.75, 1.85]
+        #p1 = [53.4, 39.35, 1.85]   # holl  (case 1)
+        #p2 = [53.0, 44.75, 1.85]
 
         #p1 = [52.0, 50.0, 1.0]
         #p2 = [58.0, 55.0, 1.0]
@@ -918,8 +919,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [53.0, 70.0, 1.0]   # 504
         #p2 = [58.0, 72.0, 1.5]
 
-        #p1 = [53.7, 73.8, 1.5]   # 504  (case 2)
-        #p2 = [56.7, 73.0, 1.5]
+        p1 = [52.7, 73.8, 1.5]   # 504  (case 2)
+        p2 = [56.7, 73.0, 1.5]
 
         #p1 = [57.0, 69.0, 2.0]   # both in 504
         #p2 = [58.0, 73.0, 1.0]
@@ -935,14 +936,17 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p2 = [-104, -70, 2]     # bonn
         self.draw_p1_p2([p1, p2])
         
-        #return
+        return
         fc = 5.6*10**9
         n_walls, faces, segments, DRs, face_ps, face_vs = functions.walls_to_arrays(self.walls_list)
         ray_tracing = rt.Ray_tracing(p1, self.walls_list, 
                 n_walls, faces, segments, 
-                DRs, face_ps, face_vs, fc)
-        H = ray_tracing.mimo_channel_matrix_rigorous(p1, p2)
-        print("H:", H)
+                DRs, face_ps, face_vs, fc,
+                'image', 'rigorous')
+        #cr_points = ray_tracing.d_crossing_wall(p1, p2)
+
+        #H = ray_tracing.mimo_channel_matrix(p1, p2)
+        #print("H:", H)
         #cr_points, cr_facets, d_facets = ray_tracing.image_method(p1, p2)
         #print(len(self.walls_list))
         #self.draw_rt_lines(p1, p2, cr_points)
@@ -1072,9 +1076,16 @@ class GraphicsView(QtWidgets.QGraphicsView):
         print('draw walls')
         #print(self.walls_list)
         for i in range(len(self.walls_list)):
+            if i not in [70]:  # TODO
+                continue
             floor_edge = self.walls_list[i][0][1]
+            print(i, abs(floor_edge[0][0] - floor_edge[4][0]) + 
+                            abs(floor_edge[0][1] - floor_edge[4][1]))
             points = []
             for j in range(len(floor_edge) // 2):
+                #idx = 7
+                #if j not in [idx, idx+1]:
+                    #continue
                 x1 = self.vesx*(floor_edge[2*j][1])
                 y1 = -self.vesy*(floor_edge[2*j][0])
                 points.append(QtCore.QPointF(x1, y1))
@@ -1096,18 +1107,6 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #self.ensureVisible(self.coverage_item)
         #self.setSceneRect(self.coverage_item.boundingRect())
         self.setSceneRect(self.scene.itemsBoundingRect())
-        return
-
-    def draw_walls2(self):
-        for i in range(len(self.walls_list)):
-            floor_edge = self.walls_list[i][0][1]
-            for j in range(len(floor_edge) // 2):
-                x1 = self.vesy*(floor_edge[2*j][1])
-                y1 = -self.vesx*(floor_edge[2*j][0])
-                x2 = x1 + self.vesy*(floor_edge[2*j+1][1])
-                y2 = y1 - self.vesx*(floor_edge[2*j+1][0])
-                line = self.scene.addLine(x1, y1, x2, y2, self.blackPen)
-                self.scene_lines.append(line)
         return
 
     def task2(self):

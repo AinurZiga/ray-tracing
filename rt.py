@@ -2,18 +2,23 @@ import numpy as np
 import multiprocessing
 import numba as nb
 
-import values5 as values   # TODO
+#import values5 as values   # TODO
 import functions
 import logging
 logging.basicConfig(filename='./logs/rt.log', filemode='w',level=logging.INFO)
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 class Ray_tracing:
-    def __init__(self, p_BS, walls, 
+    def __init__(self, p_BS, walls, materials, 
                 n_walls, facets, segments, 
-                DRs, facet_ps, facet_vs, fc) -> None:
+                DRs, facet_ps, facet_vs, fc, method='image',
+                type='rigorous') -> None:
         self.p_BS = p_BS
         self.walls = walls
+        self.materials = materials
         self.n_walls = n_walls
         self.facets = facets
         self.segments = segments 
@@ -21,7 +26,21 @@ class Ray_tracing:
         self.facet_ps = facet_ps
         self.facet_vs = facet_vs
         self.fc = fc
+        self.method = method
+        self.type = type
+
+        self.floor_h = 0.0
+        self.ceil_h = 4.0
+
+        self._init()
         pass
+
+    def _init(self):
+        self.dict_materials = {}
+        self.dict_materials['Brick': 3.75 - 1j * (17.98 * 0.038 / (self.fc/10**9))]
+        self.dict_materials['Wood': 1.99 - 1j * (17.98 * 0.0047 * (self.fc/10**9)**(1.0718-1))]
+        #self.dict_materials['Ceiling decking': 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)]
+        self.dict_materials['Metal': 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)]  #TODO
 
     def mimo_rates_help(self, p1):
         p1 = list(p1)
@@ -63,17 +82,12 @@ class Ray_tracing:
         p_rates += value6,
         return p_rates
 
-    def mimo_channel_matrix_rigorous(self, p1, p2):
+    def mimo_channel_matrix(self, p1, p2):
+        if self.type == 'rigorous':
+            return self._mimo_channel_matrix_rigorous(p1, p2)
+
+    def _mimo_channel_matrix_rigorous_old(self, p1, p2):
         # вернуть полную канальную матрицу
-        #global p1, p2
-        #shift = 82/1000
-        #H = [[0 for i in range(3)] for j in range(3)]
-        #cr_points, cr_faces, d_faces = ray_tracing(p1, p2, walls, 
-        #                            n_walls, faces, segments, DRs, face_ps, face_vs)
-        #print(len(cr_points), cr_points)
-        #print("crossings:", len(cr_points))
-        #H = step_3(p1, p2, cr_points, cr_faces, d_faces, walls, n_walls, 
-        #                    faces, segments, DRs, face_ps, face_vs, fc)
         shift = 82/1000
         H = np.zeros((3,3), dtype=np.complex128)
         for i in range(3):
@@ -82,15 +96,30 @@ class Ray_tracing:
                 p1_ij[0] += shift * (i - 1)
                 p2_ij = list(p2)
                 p2_ij[0] += shift * (j - 1)
-                cr_points, cr_faces, d_facets = self.image_method(p1_ij, p2_ij)
-                #print(i, j, len(cr_points))
-                if i == j == 1:
-                    print("reflections:", len(cr_points))
-                H[i][j] = self.calc_amplitudes(p1, p2, cr_points, d_facets)
+                cr_points, filter_idx, d_facets = self._image_method(p1_ij, p2_ij)
+                H[i][j] = self._calc_amplitudes(p1, p2, cr_points, d_facets)
         #cr_points, cr_facets, d_facets = self.image_method(p1, p2)
         return H
 
-    def calc_amplitudes(self, p1, p2, cr_points, d_facets):
+    def _mimo_channel_matrix_rigorous(self, p1, p2):
+        # вернуть полную канальную матрицу
+        shift = 82/1000
+        H = np.zeros((3,3), dtype=np.complex128)
+        cr_points, d_facets, filter_idx = self._image_method(p1, p2)
+        for i in range(3):
+            for j in range(3):
+                p1_ij = list(p1)
+                p1_ij[0] += shift * (i - 1)
+                p2_ij = list(p2)
+                p2_ij[0] += shift * (j - 1)
+                #cr_points, filter_idx, d_facets = self._image_method(p1_ij, p2_ij)
+                logging.info("H[i][j]:" + str((i,j)) + '\n')
+                cr_points, d_facets, _ = self._image_method(p1_ij, p2_ij, filter_idx)
+                H[i][j] = self._calc_amplitudes(p1, p2, cr_points, d_facets)
+        #cr_points, cr_facets, d_facets = self.image_method(p1, p2)
+        return H
+
+    def _calc_amplitudes(self, p1, p2, cr_points, d_facets):
         c = 3*10**8
         lamda = c / self.fc
         #k = 2*3.14 / lamda
@@ -102,12 +131,14 @@ class Ray_tracing:
         D_direct = functions.vec_len(p1, p2)
         ray0 = Ampl * np.exp(-2j*np.pi*self.fc*D_direct/c) / D_direct
         facets_d_theta = self.d_crossing_wall(p1, p2)
+        logging.info("facets_d_theta:" +str(facets_d_theta))
+        #print("facets_d_theta:", facets_d_theta)
         for i in range(facets_d_theta.shape[1]):
             facet_d = facets_d_theta[0, i]
             facet_theta = facets_d_theta[1, i]
             #eta = 3.75 - 1j * (17.98 * 0.038 / 5.6)   # brick
             eta = eta_brick
-            q = 6.28*self.facet_d/lamda * np.sqrt(eta - np.sin(facet_theta)**2)
+            q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(facet_theta)**2)
             tmp1 = np.cos(facet_theta) - np.sqrt(facet_theta - np.sin(facet_theta)**2)
             tmp2 = np.cos(facet_theta) + np.sqrt(facet_theta - np.sin(facet_theta)**2)
             R_prime = tmp1 / tmp2
@@ -115,9 +146,9 @@ class Ray_tracing:
             tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
             T = tmp3 / tmp2
             ray0 = ray0 * T
-            logging.info('Direct ray i, T: ' + str(np.round((i, T)),2) + '\n')
+            logging.info('Direct ray wall passes i, T: ' + str((i, np.abs(T))) + '\n')
         rays = ray0
-        logging.info('Direct ray0: ' + str(ray0)+ '\n')
+        logging.info('Direct ray0: ' + str(np.abs(ray0))+ '\n')
 
         for i, point in enumerate(cr_points):
             d = d_facets[i]
@@ -164,18 +195,21 @@ class Ray_tracing:
                 logging.info('Reflection i,T: ' + str((i,np.abs(T))) + '\n')   
             rays += ray
             logging.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
-                    np.asb(R), tau*10**6, np.abs(ray))) + '\n')
+                    np.abs(R), tau*10**6, np.abs(ray))) + '\n')
         return rays
     
-    def image_method(self, p1, p2):
-        """ Calculating reflected rays """
+    def _image_method(self, p1, p2, filter_idx=None):
+        """ Finds reflected rays """
         cr_points = []
-        cf_facets = []
+        #cf_facets = []
         d_facets = []
+        idx_walls = []
         count = 0
 
         los_crossings = self.crossing_wall(p1, p2)
         for i in range(len(self.walls)):
+            if filter_idx and i not in filter_idx:
+                continue
             for j in range(len(self.walls[i])):
                 # Проверим, находяться ли точки p1 и p2 по одну сторону от плоскости
                 # подставим их в уравнение плоскости
@@ -213,25 +247,41 @@ class Ray_tracing:
                     los1 = self.crossing_wall(p1, C1)
                     los2 = self.crossing_wall(p2, C2)
                     if (los1 + los2 <= los_crossings+1) and (C not in cr_points):
-                        cf_facets.append(facet)
+                        #cf_facets.append(facet)
                         cr_points.append(C)
-                        d = 0.2   # TODO
+                        idx = 2*(j-2)-1
+                        if idx < 1:
+                            idx += 2
+                            if idx < 1:
+                                idx = 1
+                        #print(self.walls[i][0][1][2*(j-2)-1])
+                        #print(self.walls[i][0][1][idx])
+                        d = functions.vec_abs(self.walls[i][0][1][idx])  #TODO
+                        print(d)
+                        if d > 0.5:
+                            d = 0.5
                         d_facets.append(d)
+                        idx_walls.append(i)
                         count += 1
-        C = self.floor_reflect(p1, p2, los_crossings)
+                        #print("cr_points:", i,j, C)
+                        logging.info("Found reflection i,j,los,C:" + str((i,j,los1+los2, C)))
+        #print("cr_points:", cr_points)
+        C = self._floor_reflect(p1, p2, los_crossings)
         if C and (C not in cr_points):
             cr_points.append(C)
             d_facets.append(0.3)
-        C = self.ceil_reflect(p1, p2, los_crossings)
+        C = self._ceil_reflect(p1, p2, los_crossings)
         if C and (C not in cr_points):
             cr_points.append(C)
             d_facets.append(0.3)
         #print("cr_points:", len(cr_points), cr_points)
-        return cr_points, cf_facets, d_facets
+        return cr_points, d_facets, idx_walls
 
-    def floor_reflect(self, p1, p2, los_crossings):
+    def _floor_reflect(self, p1, p2, los_crossings):
         k = p2[2] / p1[2]
         C = [0.0]*3
+        #C = [self.floor_h]*3
+        C[2] = self.floor_h
         C[0] = p1[0] + (p2[0] - p1[0])/(k + 1)
         C[1] = p1[1] + (p2[1] - p1[1])/(k + 1)
         C1 = [C[i] - (C[i] - p1[i])*0.001 for i in range(3)]
@@ -242,10 +292,11 @@ class Ray_tracing:
             return C
         return None
 
-    def ceil_reflect(self, p1, p2, los_crossings):
+    def _ceil_reflect(self, p1, p2, los_crossings):
         k = p2[2] / p1[2]
         C = [0.0]*3
-        C[2] = 3.0
+        #C = [self.ceil_h]*3
+        C[2] = self.ceil_h
         C[0] = p1[0] + (p2[0] - p1[0])/(k + 1)
         C[1] = p1[1] + (p2[1] - p1[1])/(k + 1)
         C1 = [C[i] - (C[i] - p1[i])*0.001 for i in range(3)]

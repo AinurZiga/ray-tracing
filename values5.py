@@ -893,7 +893,7 @@ def mimo_channel_matrix_rig(p1, p2, walls,
                                 n_walls, faces, segments, DRs, face_ps, face_vs)
             #print(i, j, len(cr_points))
             if i == j == 1:
-                print("crossings:", len(cr_points))
+                print("reflections:", len(cr_points))
             #H[i][j] = calc_amplitudes(p1_ij, p2_ij, cr_points, cr_faces, d_faces, walls_list)
             H[i][j] = calc_amplitudes(p1_ij, p2_ij, cr_points, cr_faces, d_faces, walls,
                                 n_walls, faces, segments, DRs, face_ps, face_vs, fc)
