@@ -4,31 +4,8 @@ import numba as nb
 
 import values5 as values   # TODO
 import functions
-
-
-"""def waterpouring(Mt, H_chan):
-    r = Mt
-    H_sq = np.dot(H_chan,np.matrix(H_chan, dtype=complex).H)
-    lambdas = np.linalg.eigvals(H_sq) 
-    lambdas = np.sort(lambdas)[::-1]
-    p = 1
-    gammas = np.zeros((r,1))
-    flag = True
-    while flag == True:
-        lambdas_r_p_1 = lambdas[0:(r-p+1)]
-        inv_lambdas_sum =  np.sum(1/lambdas_r_p_1)
-        mu = ( Mt / (r - p + 1) ) * ( 1 + inv_lambdas_sum)
-        for idx, item in enumerate(lambdas_r_p_1):
-            gammas[idx] = mu - (Mt/(item))
-        if gammas[r-p] < 0:
-            gammas[r-p] = 0
-            p = p + 1
-        else:
-            flag = False
-    res = []
-    for gamma in gammas:
-        res.append(float(gamma))
-    return np.array(res)"""
+import logging
+logging.basicConfig(filename='./logs/rt.log', filemode='w',level=logging.INFO)
 
 
 class Ray_tracing:
@@ -122,9 +99,6 @@ class Ray_tracing:
         #Ampl = 2*lamda / (4*np.pi)  # + antenna gain
         Ampl = 2  # + antenna gain
         #eta = eta_brick
-
-
-
         D_direct = functions.vec_len(p1, p2)
         ray0 = Ampl * np.exp(-2j*np.pi*self.fc*D_direct/c) / D_direct
         facets_d_theta = self.d_crossing_wall(p1, p2)
@@ -141,7 +115,9 @@ class Ray_tracing:
             tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
             T = tmp3 / tmp2
             ray0 = ray0 * T
+            logging.info('Direct ray i, T: ' + str(np.round((i, T)),2) + '\n')
         rays = ray0
+        logging.info('Direct ray0: ' + str(ray0)+ '\n')
 
         for i, point in enumerate(cr_points):
             d = d_facets[i]
@@ -184,8 +160,11 @@ class Ray_tracing:
                 tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
                 tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
                 T = tmp3 / tmp2
-                ray = ray * T        
+                ray = ray * T     
+                logging.info('Reflection i,T: ' + str((i,np.abs(T))) + '\n')   
             rays += ray
+            logging.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
+                    np.asb(R), tau*10**6, np.abs(ray))) + '\n')
         return rays
     
     def image_method(self, p1, p2):
