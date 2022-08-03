@@ -892,9 +892,9 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.vesx = 30
         self.vesy = 30
 
-        self.analyse_points, self.walls_list = functions.open_file(filename)
+        self.analyse_points, self.walls_list, self.materials = functions.open_file(filename)
         #self.walls_list = [self.walls_list[25]]
-        print('walls:', len(self.walls_list))
+        #print('walls:', len(self.walls_list))
         self.draw_walls()
         #self.draw_analyse_points()
         #n_walls, faces, segments, DRs, face_ps, face_vs = values.walls_to_arrays(self.walls_list)
@@ -910,8 +910,9 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [48.0, 15.0, 1.0]   # rts1
         #p2 = [53.0, 36.0, 1.0]
 
-        #p1 = [53.4, 39.35, 1.85]   # holl  (case 1)
+        p1 = [53.9, 39.35, 1.45]   # holl  (case 1)
         #p2 = [53.0, 44.75, 1.85]
+        p2 = [53.9, 48.3, 1.45]
 
         #p1 = [52.0, 50.0, 1.0]
         #p2 = [58.0, 55.0, 1.0]
@@ -919,8 +920,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [53.0, 70.0, 1.0]   # 504
         #p2 = [58.0, 72.0, 1.5]
 
-        p1 = [52.7, 73.8, 1.5]   # 504  (case 2)
-        p2 = [56.7, 73.0, 1.5]
+        #p1 = [52.7, 73.8, 1.5]   # 504  (case 2)
+        #p2 = [56.7, 73.0, 1.5]
 
         #p1 = [57.0, 69.0, 2.0]   # both in 504
         #p2 = [58.0, 73.0, 1.0]
@@ -936,10 +937,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p2 = [-104, -70, 2]     # bonn
         self.draw_p1_p2([p1, p2])
         
-        return
+        #return
         fc = 5.6*10**9
         n_walls, faces, segments, DRs, face_ps, face_vs = functions.walls_to_arrays(self.walls_list)
-        ray_tracing = rt.Ray_tracing(p1, self.walls_list, 
+        
+        ray_tracing = rt.Ray_tracing(p1, self.walls_list, self.materials,
                 n_walls, faces, segments, 
                 DRs, face_ps, face_vs, fc,
                 'image', 'rigorous')
@@ -947,9 +949,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
         #H = ray_tracing.mimo_channel_matrix(p1, p2)
         #print("H:", H)
-        #cr_points, cr_facets, d_facets = ray_tracing.image_method(p1, p2)
+        (cr_points, d_facets, materials, type_reflections, 
+                idx_walls) = ray_tracing._image_method(p1, p2)
         #print(len(self.walls_list))
-        #self.draw_rt_lines(p1, p2, cr_points)
+        print(materials)
+        self.draw_rt_lines(p1, p2, cr_points)
         return
         self.draw_rt_lines(p1, p2, cr_points)
         #return
@@ -1076,11 +1080,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
         print('draw walls')
         #print(self.walls_list)
         for i in range(len(self.walls_list)):
-            if i not in [70]:  # TODO
-                continue
+            #if i not in [70]:  # change
+            #    continue
             floor_edge = self.walls_list[i][0][1]
-            print(i, abs(floor_edge[0][0] - floor_edge[4][0]) + 
-                            abs(floor_edge[0][1] - floor_edge[4][1]))
+            #print(i, abs(floor_edge[0][0] - floor_edge[4][0]) + 
+            #                abs(floor_edge[0][1] - floor_edge[4][1]))
             points = []
             for j in range(len(floor_edge) // 2):
                 #idx = 7

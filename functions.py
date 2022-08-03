@@ -203,7 +203,7 @@ def crossing_wall(p1, p2, n_walls, faces, segments,
     return cr_walls
 
 @nb.njit(cache=True)
-def d_crossing_wall(p1, p2, n_walls, faces, segments, 
+def d_crossing_wall(p1, p2, n_walls, faces, segments, materials, 
             DRs=np.array([[]]), face_ps=np.array([[]]), face_vs=np.array([[]])):
     #cr_walls = 0
     #faces_d = []
@@ -211,6 +211,8 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments,
     pool = np.zeros((2, 3))
     faces_d = nb.typed.List.empty_list(nb.float64)
     faces_theta = nb.typed.List.empty_list(nb.float64)
+    #faces_materials = nb.typed.List.empty_list(nb.float64)
+    faces_idxs = nb.typed.List.empty_list(nb.float64)
     for i in range(n_walls):  # walls
         if i not in [2]:
             continue
@@ -253,14 +255,17 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments,
                         if theta > np.pi/2:
                             theta = np.pi - theta
                         faces_theta.append(theta)
+                        #faces_materials.append(materials[i])
+                        faces_idxs.append(i)
                         cr_p1 = [0.0]*3
                         #break
                     else:
                         cr_p1 = list(crossing_p)
-    res = np.zeros((2, len(faces_d)), dtype=nb.float64) #TODO
+    res = np.zeros((3, len(faces_d)), dtype=nb.float64) #TODO
     for i in range(len(faces_d)):
         res[0, i] = faces_d[i]
         res[1, i] = faces_theta[i]
+        res[2, i] = faces_idxs[i]
     return res
 
     
