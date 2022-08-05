@@ -29,6 +29,10 @@ class Ray_tracing:
         self.method = method
         self.type = type
 
+        self.is_ceil_reflection = False
+        self.is_floor_reflection = False
+        self.ceil_material = 'Wood'
+        self.floor_material = 'Wood'
         self.floor_h = 0.0
         self.ceil_h = 4.0
 
@@ -221,6 +225,84 @@ class Ray_tracing:
             logging.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
                     np.abs(R), tau*10**6, np.abs(ray))) + '\n')
         return rays
+
+    """def _find_crossing_plane(p1, p2, DR, face):
+        D0 = (DR[0] * face[0][0] + DR[1] * face[0][1] + DR[2] * face[0][2])
+        tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DR[2] * p1[2]
+        tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
+        if tmp2 == 0:
+            return False
+        t0 = tmp1 / tmp2
+        crossing_p = [0.0] * 3
+        for k in range(3):
+            crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
+        if functions.skal(crossing_p, p1, p2) > 0:
+            return False
+        if functions.is_point_inside_figure(crossing_p, DR, face[::2], face[1::2]):
+            return crossing_p"""
+
+
+    def _image_method_outer_loop(self, p1, p2, filter_idx=None):
+        cr_points = []
+        #cf_facets = []
+        d_facets = []
+        idx_walls = []
+        materials = []
+        type_reflections = []
+        #count = 0
+        #los_crossings = self._crossing_wall(p1, p2)
+        for i in range(len(self.walls)):
+            print(i)
+            if filter_idx and i not in filter_idx:
+                continue
+            for j in range(len(self.walls[i])):
+                facet = self.walls[i][j]
+                DR = facet[0]
+                D = -(DR[0]*facet[1][0][0] + DR[1]*facet[1][0][1] + DR[2]*facet[1][0][2])
+                #a2 = DR[0]*p2[0] + DR[1]*p2[1] + DR[2]*p2[2] + D
+                #p2_prime = [p2[k] - a2*DR[k] for k in range(3)]
+                a1 = DR[0]*p1[0] + DR[1]*p1[1] + DR[2]*p1[2] + D
+                p1_prime = [p1[k] - 2*a1*DR[k] for k in range(3)]
+                #print(p1, p1_prime)
+                (cr_points_inner, d_facets_inner, materials_inner, type_reflections_inner, 
+                        idx_walls_inner) = self._image_method(p1_prime, p2)
+                #print("cr_points_inner:", i,j,len(cr_points_inner))
+                if not cr_points_inner:
+                    continue
+                #cr_points.append(C)
+                idx = 2*(j-2)-1
+                if idx < 1:
+                    idx += 2
+                    if idx < 1:
+                        idx = 1
+                d_facet = functions.vec_abs(self.walls[i][0][1][idx])
+
+                if abs(DR[0]) > abs(DR[2]) or abs(DR[1]) > abs(DR[2]):
+                    type_reflection = 'TE'  # wall
+                else:
+                    type_reflection = 'TM'
+
+                material = self.materials[i]
+
+                idx_wall = i
+                #print("len:", len(cr_points_inner), len(materials_inner))
+                #print("outer",cr_points_inner, materials_inner)
+                for k in range(len(cr_points_inner)):
+                    C1 = functions.find_crossing_plane(p1_prime, cr_points_inner[k], 
+                                    DR, facet[1])
+                    if not C1:
+                        continue
+                    impinging = [C1[k] - p1[k] for k in range(3)]  # падающий луч
+                    if functions.skal_mul(impinging, DR) >= 0:
+                        continue
+                    cr_points += [C1, cr_points_inner[k]]
+                    d_facets += [d_facet, d_facets_inner[k]]
+                    materials += [material, materials_inner[k]]
+                    type_reflections += [type_reflection, type_reflections_inner[k]]
+                    idx_walls += [idx_wall, idx_walls_inner[k]]
+                #print("cr_points:", i,j,len(cr_points)//2)
+        return cr_points, d_facets, materials, type_reflections, idx_walls
+
     
     def _image_method(self, p1, p2, filter_idx=None):
         """ Finds reflected rays 
@@ -297,6 +379,8 @@ class Ray_tracing:
                         d_facets.append(d)
                         idx_walls.append(i)
                         materials.append(self.materials[i])
+                        #print("inner",cr_points, materials)
+
                         if abs(DR[0]) > abs(DR[2]) or abs(DR[1]) > abs(DR[2]):
                             type_reflections.append('TE')  # wall
                         else:
@@ -305,14 +389,16 @@ class Ray_tracing:
                         #print("cr_points:", i,j, C)
                         logging.info("Found reflection i,j,los,C:" + str((i,j,los1+los2, C)))
         #print("cr_points:", cr_points)
-        C = self._floor_reflect(p1, p2, los_crossings)
-        if C and (C not in cr_points):
-            cr_points.append(C)
-            d_facets.append(0.3)
-        C = self._ceil_reflect(p1, p2, los_crossings)
-        if C and (C not in cr_points):
-            cr_points.append(C)
-            d_facets.append(0.3)
+        if self.is_floor_reflection:
+            C = self._floor_reflect(p1, p2, los_crossings)
+            if C and (C not in cr_points):
+                cr_points.append(C)
+                d_facets.append(0.3)
+        if self.is_ceil_reflection:
+            C = self._ceil_reflect(p1, p2, los_crossings)
+            if C and (C not in cr_points):
+                cr_points.append(C)
+                d_facets.append(0.3)
         #print("cr_points:", len(cr_points), cr_points)
         return cr_points, d_facets, materials, type_reflections, idx_walls
 

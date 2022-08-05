@@ -910,9 +910,9 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [48.0, 15.0, 1.0]   # rts1
         #p2 = [53.0, 36.0, 1.0]
 
-        p1 = [53.9, 39.35, 1.45]   # holl  (case 1)
+        #p1 = [53.9, 39.35, 1.45]   # holl  (case 1)
         #p2 = [53.0, 44.75, 1.85]
-        p2 = [53.9, 48.3, 1.45]
+        #p2 = [53.9, 48.3, 1.45]
 
         #p1 = [52.0, 50.0, 1.0]
         #p2 = [58.0, 55.0, 1.0]
@@ -923,7 +923,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [52.7, 73.8, 1.5]   # 504  (case 2)
         #p2 = [56.7, 73.0, 1.5]
 
-        #p1 = [57.0, 69.0, 2.0]   # both in 504
+        #p1 = [56.5, 69.0, 2.0]   # both in 504
         #p2 = [58.0, 73.0, 1.0]
 
         #p1 = [54.0, 35.0, 2.5]
@@ -935,9 +935,13 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #p1 = [-224, -255, 20]   # BS  bonn
         #p2 = [-85, -65, 2]
         #p2 = [-104, -70, 2]     # bonn
-        self.draw_p1_p2([p1, p2])
+        #self.draw_p1_p2([p1, p2])
         
         #return
+        import viewer_main
+        viewer_main.main_fun(self)
+
+        return
         fc = 5.6*10**9
         n_walls, faces, segments, DRs, face_ps, face_vs = functions.walls_to_arrays(self.walls_list)
         
@@ -946,14 +950,21 @@ class GraphicsView(QtWidgets.QGraphicsView):
                 DRs, face_ps, face_vs, fc,
                 'image', 'rigorous')
         #cr_points = ray_tracing.d_crossing_wall(p1, p2)
-
+        #p11 =[56.5, 69.0, 2.0] 
+        #p21 = [52.341435944, 69.0, 2.0]
+        #self.draw_p1_p2([p11, p21])
         #H = ray_tracing.mimo_channel_matrix(p1, p2)
         #print("H:", H)
-        (cr_points, d_facets, materials, type_reflections, 
-                idx_walls) = ray_tracing._image_method(p1, p2)
+        #(cr_points, d_facets, materials, type_reflections, 
+        #        idx_walls) = ray_tracing._image_method(p1, p2)
         #print(len(self.walls_list))
-        print(materials)
-        self.draw_rt_lines(p1, p2, cr_points)
+        #print(materials)
+        #self.draw_rt_lines(p1, p2, cr_points)
+
+        (cr_points2, d_facets, materials, type_reflections, 
+                idx_walls) = ray_tracing._image_method_outer_loop(p1, p2)
+        print(len(cr_points2))
+        self.draw_rt_2_bounce(p1, p2, cr_points2)
         return
         self.draw_rt_lines(p1, p2, cr_points)
         #return
@@ -1035,6 +1046,25 @@ class GraphicsView(QtWidgets.QGraphicsView):
             line2 = self.scene.addLine(x1, -y1,
                 self.vesy*p2[1], -self.vesx*p2[0], self.greenPen)
 
+    def draw_rt_2_bounce(self, p1, p2, cr_points):
+        for i in range(len(cr_points)//2):
+        #for i in range(3):
+            point1 = cr_points[2*i]
+            point2 = cr_points[2*i+1]
+            x1 = self.vesy*(point1[1])
+            y1 = self.vesx*(point1[0])
+            x2 = self.vesy*(point2[1])
+            y2 = self.vesx*(point2[0])
+            #x2 = x1 + self.vesx*(p2[0])
+            #y2 = y1 + self.vesy*(p2[1])
+            #line1 = self.scene.addLine(p1[0])
+            line1 = self.scene.addLine(x1, -y1,
+                self.vesy*p1[1], -self.vesx*p1[0], self.redPen)
+            line2 = self.scene.addLine(x1, -y1,
+                x2, -y2, self.cyanPen)
+            line3 = self.scene.addLine(x2, -y2,
+                self.vesy*p2[1], -self.vesx*p2[0], self.cyanPen)
+
     def draw_p(self, p):
         sh1 = 0.3*self.vesy*self.step *2
         sh2 = 0.3*self.vesx*self.step*2
@@ -1046,8 +1076,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         return 
 
     def draw_p1_p2(self, points):
-        sh1 = 0.3*self.vesy*self.step *4
-        sh2 = 0.3*self.vesx*self.step*4
+        sh1 = 0.3*self.vesy*self.step *1
+        sh2 = 0.3*self.vesx*self.step*1
         #self.point_items = []
         for i, point in enumerate(points):
             self.scene.addRect(

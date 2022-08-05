@@ -136,6 +136,22 @@ def walls_to_arrays(walls):
 
 #----------------------------------------------------------------------
 
+def find_crossing_plane(p1, p2, DR, facet):
+    D0 = (DR[0] * facet[0][0] + DR[1] * facet[0][1] + DR[2] * facet[0][2])
+    tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DR[2] * p1[2]
+    tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
+    if tmp2 == 0:
+        return False
+    t0 = tmp1 / tmp2
+    crossing_p = [0.0] * 3
+    for k in range(3):
+        crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
+    if skal(crossing_p, p1, p2) > 0:
+        return False
+    if is_point_inside_figure(crossing_p, DR, np.array(facet[::2]), np.array(facet[1::2])):
+        return crossing_p
+
+
 @nb.njit(cache=True)
 def crossing_wall(p1, p2, n_walls, faces, segments, 
             DRs=np.array([[]]), face_ps=np.array([[]]), face_vs=np.array([[]])):
