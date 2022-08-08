@@ -895,7 +895,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.analyse_points, self.walls_list, self.materials = functions.open_file(filename)
         #self.walls_list = [self.walls_list[25]]
         #print('walls:', len(self.walls_list))
-        self.draw_walls()
+        #self.draw_walls()
         #self.draw_analyse_points()
         #n_walls, faces, segments, DRs, face_ps, face_vs = values.walls_to_arrays(self.walls_list)
 
@@ -1032,10 +1032,18 @@ class GraphicsView(QtWidgets.QGraphicsView):
             pol.setPolygon(QtGui.QPolygonF(points))
             self.scene_pols.append(pol)
 
-    def draw_rt_lines(self, p1, p2, cr_points):
-        line_direct = self.scene.addLine(self.vesy*p1[1], -self.vesx*p1[0],
+    def draw_direct_line(self, p1, p2):
+        self.scene.addLine(self.vesy*p1[1], -self.vesx*p1[0],
                 self.vesy*p2[1], -self.vesx*p2[0], self.redPen)
-        for point in cr_points:
+
+    def draw_rt_1_bounce(self, p1, p2, cr_points, filter_idxs=None):
+        #line_direct = self.scene.addLine(self.vesy*p1[1], -self.vesx*p1[0],
+        #        self.vesy*p2[1], -self.vesx*p2[0], self.redPen)
+        print("filter_idxs:", filter_idxs)
+        self.draw_direct_line(p1,p2)
+        for i, point in enumerate(cr_points):
+            if filter_idxs != None and i not in filter_idxs:
+                continue
             x1 = self.vesy*(point[1])
             y1 = self.vesx*(point[0])
             #x2 = x1 + self.vesx*(p2[0])
@@ -1046,9 +1054,10 @@ class GraphicsView(QtWidgets.QGraphicsView):
             line2 = self.scene.addLine(x1, -y1,
                 self.vesy*p2[1], -self.vesx*p2[0], self.greenPen)
 
-    def draw_rt_2_bounce(self, p1, p2, cr_points):
+    def draw_rt_2_bounce(self, p1, p2, cr_points, filter_idxs = None):
         for i in range(len(cr_points)//2):
-        #for i in range(3):
+            if filter_idxs and i not in filter_idxs:
+                continue
             point1 = cr_points[2*i]
             point2 = cr_points[2*i+1]
             x1 = self.vesy*(point1[1])
@@ -1059,7 +1068,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
             #y2 = y1 + self.vesy*(p2[1])
             #line1 = self.scene.addLine(p1[0])
             line1 = self.scene.addLine(x1, -y1,
-                self.vesy*p1[1], -self.vesx*p1[0], self.redPen)
+                self.vesy*p1[1], -self.vesx*p1[0], self.cyanPen)
             line2 = self.scene.addLine(x1, -y1,
                 x2, -y2, self.cyanPen)
             line3 = self.scene.addLine(x2, -y2,
@@ -1106,11 +1115,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
         return
 
 
-    def draw_walls(self):
+    def draw_walls(self, filter_idx=None):
         print('draw walls')
         #print(self.walls_list)
         for i in range(len(self.walls_list)):
-            #if i not in [70]:  # change
+            #if filter_idx and i not in filter_idx:  # change
             #    continue
             floor_edge = self.walls_list[i][0][1]
             #print(i, abs(floor_edge[0][0] - floor_edge[4][0]) + 
@@ -1127,16 +1136,20 @@ class GraphicsView(QtWidgets.QGraphicsView):
             pol.setZValue(5)
             self.scene.addItem(pol)
             pol.set_poly(points)
-            pol.setPen(QtGui.QPen(self.color_wall, self.thick_wall))
+            if filter_idx and i not in filter_idx:  # change
+                #continue
+                pol.setPen(QtGui.QPen(self.color_window, self.thick_window+2))
+            else:
+                pol.setPen(QtGui.QPen(self.color_wall, self.thick_wall))
             pol.setPolygon(QtGui.QPolygonF(points))
             self.scene_pols.append(pol)
-            if i == 0:
+            """if i == 0:
                 self.coverage_item = pol
                 #self.centerOn(self.coverage_item)
                 #self.fitInView(self.coverage_item, QtCore.Qt.KeepAspectRatio)
                 #self.ensureVisible(self.coverage_item)
                 self.coverage_item.setPen(QtGui.QPen(self.color_coverage,
-                                                    self.thick_coverage))
+                                                    self.thick_coverage))"""
         #self.centerOn(self.coverage_item)
         #self.ensureVisible(self.coverage_item)
         #self.setSceneRect(self.coverage_item.boundingRect())
@@ -1372,7 +1385,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                 self.user_update2(i, x_new, y_new, z_new)
         self.right.fill_LE_user(self.users)
 
-    def user_update2(self, i, x_new, y_new, z_new):
+    """def user_update2(self, i, x_new, y_new, z_new):
         for j in range(self.v_Npoints):
             cond1 = abs(self.v_points[j][0] - x_new) < 10**-1
             cond2 = abs(self.v_points[j][1] - y_new) < 10**-1
@@ -1390,7 +1403,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                             2*sh2, self.redPen, self.redBrush)
                 self.items_user[i] = self.new_item2
                 self.changed = False
-                self.addition = None
+                self.addition = None"""
 
     def wheelEvent(self, event):
         if self.is_key_ctrl:

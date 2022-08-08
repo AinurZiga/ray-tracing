@@ -30,3 +30,21 @@ assert a[0,0] == 0.156225
 assert a[1,0] == 0.283245
 assert a[2,0] == 2
 #print(a)
+###############################################
+
+p1 = [54.0, 35.0, 2.5]   # far
+p2 = [59.0, 74.0, 1.0]
+
+_, walls, materials = functions.open_file('./maps/RTS1.map')
+
+fc = 5.6*10**9
+n_walls, faces, segments, DRs, face_ps, face_vs = functions.walls_to_arrays(walls)
+
+ray_tracing = rt.Ray_tracing(p1, walls, materials, 
+                n_walls, faces, segments, 
+                DRs, face_ps, face_vs, fc,
+                'image', 'rigorous')
+
+a = ray_tracing._d_crossing_wall(p1, p2)
+#print(a, a.shape)
+assert a.shape == (3,7)

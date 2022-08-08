@@ -36,6 +36,8 @@ class Ray_tracing:
         self.floor_h = 0.0
         self.ceil_h = 4.0
 
+        self.c = 3*10**8
+
         self._init()
         pass
 
@@ -125,7 +127,7 @@ class Ray_tracing:
         return H
 
     def _calc_amplitudes(self, p1, p2, cr_points, d_facets, reflect_materials, 
-                            type_reflections):
+                            type_reflections): # deprecated
         c = 3*10**8
         lamda = c / self.fc
         #k = 2*3.14 / lamda
@@ -225,21 +227,73 @@ class Ray_tracing:
             logging.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
                     np.abs(R), tau*10**6, np.abs(ray))) + '\n')
         return rays
+    
+    def _find_T(self, facet_d, facet_theta, material):
+        """
+        inputs:
+            facet_d (float64):
+                thickness of material
+            facet_theta (float64):
+                angle of incidence in radians
+            material_idx (int64):
+                type of material (brick, wood etc)
+        outputs:
+            T (complex128):
+                passing coefficient
+        """
+        lamda = self.c / self.fc
+        #eta = self.dict_materials.get(self.materials[material_idx])
+        eta = self.dict_materials.get(material)
+        q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(facet_theta)**2)
+        tmp1 = np.cos(facet_theta) - np.sqrt(facet_theta - np.sin(facet_theta)**2)
+        tmp2 = np.cos(facet_theta) + np.sqrt(facet_theta - np.sin(facet_theta)**2)
+        R_prime = tmp1 / tmp2
+        tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
+        tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
+        T = tmp3 / tmp2
+        return T
 
-    """def _find_crossing_plane(p1, p2, DR, face):
-        D0 = (DR[0] * face[0][0] + DR[1] * face[0][1] + DR[2] * face[0][2])
-        tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DR[2] * p1[2]
-        tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
-        if tmp2 == 0:
-            return False
-        t0 = tmp1 / tmp2
-        crossing_p = [0.0] * 3
-        for k in range(3):
-            crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
-        if functions.skal(crossing_p, p1, p2) > 0:
-            return False
-        if functions.is_point_inside_figure(crossing_p, DR, face[::2], face[1::2]):
-            return crossing_p"""
+    def _find_R(self, p1, p2, cr_point, facet_d, material, type_reflection):
+        """
+        inputs:
+            p1 (list of float64):
+                point of transmitting
+            p2 (list of float64):
+                point of receiving
+            cr_point (list of float64):
+                reflection point
+            facet_d (float64):
+                thickness of material
+            material (string):
+                type of material (brick, wood etc)
+            type_reflection (string):
+                TE or TM reflection depending on polarisation
+                related to reflection wall
+        outputs:
+            R (complex128):
+                reflection coefficient
+        """
+        lamda = self.c / self.fc
+        tmp1 = sum([(p1[i] - cr_point[i])*(p2[i] - cr_point[i]) for i in range(3)])
+        tmp2 = functions.vec_len(p1, cr_point) * functions.vec_len(p2, cr_point)
+        theta = np.arccos(tmp1 / tmp2) /2
+        eta = self.dict_materials.get(material)
+        q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(theta)**2)
+        if type_reflection == 'TE':
+            tmp1 = np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
+            tmp2 = np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
+            R_prime = tmp1 / tmp2
+        elif type_reflection == 'TM':
+            q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(theta)**2)
+            tmp1 = eta*np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
+            tmp2 = eta*np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
+            R_prime = tmp1 / tmp2
+        else:
+            print("Wrong reflection type")
+        tmp1 = R_prime*(1-np.exp(-2j*q))
+        tmp2 = 1 - R_prime**2 * np.exp(-2j*q)
+        R = tmp1 / tmp2
+        return R
 
 
     def _image_method_outer_loop(self, p1, p2, filter_idx=None):
@@ -320,7 +374,7 @@ class Ray_tracing:
         type_reflections = []
         count = 0
 
-        los_crossings = self._crossing_wall(p1, p2)
+        #los_crossings = self._crossing_wall(p1, p2)
         for i in range(len(self.walls)):
             if filter_idx and i not in filter_idx:
                 continue
@@ -360,9 +414,10 @@ class Ray_tracing:
                         continue
                     C1 = [C[k] - (C[k] - p1[k])*0.001 for k in range(3)]
                     C2 = [C[k] - (C[k] - p2[k])*0.001 for k in range(3)]
-                    los1 = self._crossing_wall(p1, C1)
-                    los2 = self._crossing_wall(p2, C2)
-                    if (los1 + los2 <= los_crossings+1) and (C not in cr_points):
+                    #los1 = self._crossing_wall(p1, C1)
+                    #los2 = self._crossing_wall(p2, C2)
+                    #if (los1 + los2 <= los_crossings+10) and (C not in cr_points):
+                    if True:
                         #cf_facets.append(facet)
                         cr_points.append(C)
                         idx = 2*(j-2)-1
@@ -387,20 +442,142 @@ class Ray_tracing:
                             type_reflections.append('TM')
                         count += 1
                         #print("cr_points:", i,j, C)
-                        logging.info("Found reflection i,j,los,C:" + str((i,j,los1+los2, C)))
+                        logging.info("Found reflection i,j,C:" + str((i,j, C)))
         #print("cr_points:", cr_points)
         if self.is_floor_reflection:
-            C = self._floor_reflect(p1, p2, los_crossings)
+            C = self._floor_reflect(p1, p2)
             if C and (C not in cr_points):
                 cr_points.append(C)
                 d_facets.append(0.3)
         if self.is_ceil_reflection:
-            C = self._ceil_reflect(p1, p2, los_crossings)
+            C = self._ceil_reflect(p1, p2)
             if C and (C not in cr_points):
                 cr_points.append(C)
                 d_facets.append(0.3)
         #print("cr_points:", len(cr_points), cr_points)
         return cr_points, d_facets, materials, type_reflections, idx_walls
+    
+    def _calc_direct_ray(self, p1, p2):
+        #ray = 1.0
+        dist = functions.vec_len(p1, p2)
+        ray = np.exp(-2j*np.pi*self.fc*dist/self.c) / dist
+        facets_d_theta_mat = self._d_crossing_wall(p1, p2)
+        print("direct shape:", facets_d_theta_mat.shape)
+        for j in range(facets_d_theta_mat.shape[1]):
+            facet_d = facets_d_theta_mat[0, j]
+            facet_theta = facets_d_theta_mat[1, j]
+            facet_mat = int(facets_d_theta_mat[2, j])
+            T =self._find_T(facet_d, facet_theta, self.materials[facet_mat])
+            ray *= T
+            #print("direct, T:", np.abs(T))
+        return ray
+
+    def _calc_single_bounce_refl(self, p1, p2, cr_points, d_facets_refl,
+            materials_refl, type_reflections):
+        """
+        inputs:
+            p1 (list of float64):
+                point of transmitting
+            p2 (list of float64):
+                point of receiving
+            cr_point (list of lists of float64):
+                reflection points
+            d_facets_refl (list of float64):
+                thickness of material
+            materials_refl (list of string):
+                type of material (brick, wood etc)
+            type_reflections (list of string):
+                TE or TM reflection depending on polarisation
+                related to reflection wall
+        output:
+            rays (array of complex128):
+                amplitude of rays
+        """
+        rays = np.zeros(len(cr_points), dtype=np.complex128)
+        for i,point in enumerate(cr_points):
+            #ray = 1
+            dist = functions.vec_len(p1, point) + functions.vec_len(point, p2)
+            ray = np.exp(-2j*np.pi*self.fc*dist/self.c) / dist
+            R = self._find_R(p1, p2, point, d_facets_refl[i], materials_refl[i],
+                type_reflections[i])
+            ray *= R
+            #print("R:", i, np.abs(R))
+
+            C1 = [point[j] - (point[j] - p1[j])*0.001 for j in range(3)]
+            C2 = [point[j] - (point[j] - p2[j])*0.001 for j in range(3)]
+            facets_d_theta_mat1 = self._d_crossing_wall(p1, C1)
+            facets_d_theta_mat2 = self._d_crossing_wall(p2, C2)
+            facets_d_theta_mat = np.hstack((facets_d_theta_mat1, facets_d_theta_mat2))
+            print("refl shape:", facets_d_theta_mat.shape)
+            for j in range(facets_d_theta_mat.shape[1]):
+                facet_d = facets_d_theta_mat[0, j]
+                facet_theta = facets_d_theta_mat[1, j]
+                facet_mat = int(facets_d_theta_mat[2, j])
+                #print("facet_mat:", facet_mat)
+                T = self._find_T(facet_d, facet_theta, self.materials[facet_mat])
+                ray *= T
+                #print("T:", i, np.abs(T))
+            rays[i] = ray
+        return rays
+
+    def _calc_double_bounce_refl(self, p1, p2, cr_points, d_facets_refl,
+            materials_refl, type_reflections):
+        """
+        inputs:
+            p1 (list of float64):
+                point of transmitting
+            p2 (list of float64):
+                point of receiving
+            cr_point (doubled list of lists of float64):
+                reflection points [cr_p11, cr_p12, cr_p21, cr_p22, ...]
+            d_facets_refl (list of float64):
+                thickness of material
+            materials_refl (list of string):
+                type of material (brick, wood etc)
+            type_reflections (list of string):
+                TE or TM reflection depending on polarisation
+                related to reflection wall
+        output:
+            rays (array of complex128):
+                amplitude of rays
+        """
+        rays = np.zeros(len(cr_points)//2, dtype=np.complex128)
+        for i in range(len(cr_points)//2):
+            #ray = 1
+            dist = (functions.vec_len(p1, cr_points[2*i]) + 
+                    functions.vec_len(cr_points[2*i], cr_points[2*i+1]) + 
+                    functions.vec_len(cr_points[2*i+1], p2) )
+            ray = np.exp(-2j*np.pi*self.fc*dist/self.c) / dist
+            ray *= self._find_R(p1, cr_points[2*i+1], cr_points[2*i], d_facets_refl[i], 
+                materials_refl[i], type_reflections[i])
+            ray *= self._find_R(cr_points[2*i], p2, cr_points[2*i+1], d_facets_refl[i], 
+                materials_refl[i], type_reflections[i])
+
+            C1 = [cr_points[2*i][j] - (cr_points[2*i][j] - p1[j])*0.001 for j in range(3)]
+            C21 = [cr_points[2*i+1][j] - (cr_points[2*i+1][j] - cr_points[2*i][j])*0.001 for j in range(3)]
+            C22 = [cr_points[2*i][j] - (cr_points[2*i][j] - cr_points[2*i+1][j])*0.001 for j in range(3)]
+            C3 = [cr_points[2*i+1][j] - (cr_points[2*i+1][j] - p2[j])*0.001 for j in range(3)]
+            facets_d_theta_mat1 = self._d_crossing_wall(p1, C1)
+            facets_d_theta_mat2 = self._d_crossing_wall(C21, C22)
+            facets_d_theta_mat3 = self._d_crossing_wall(C3, p2)
+    
+            #facets_d_theta_mat1 = self._d_crossing_wall(p1, cr_points[2*i])
+            #facets_d_theta_mat2 = self._d_crossing_wall(cr_points[2*i], cr_points[2*i+1])
+            #facets_d_theta_mat3 = self._d_crossing_wall(cr_points[2*i+1], p2)
+            facets_d_theta_mat = np.hstack((facets_d_theta_mat1, facets_d_theta_mat2, facets_d_theta_mat3))
+            print("2 bounce shape:", facets_d_theta_mat.shape)
+            for j in range(facets_d_theta_mat.shape[1]):
+                facet_d = facets_d_theta_mat[0, j]
+                facet_theta = facets_d_theta_mat[1, j]
+                facet_mat = int(facets_d_theta_mat[2, j])
+                #print("facet_d, facet_theta, facet_mat:", i,j,facet_d, facet_theta, facet_mat)
+                ray *= self._find_T(facet_d, facet_theta, self.materials[facet_mat])
+            rays[i] = ray
+            #print("double-bounced ray:", i,np.abs(ray))
+        return rays
+
+    
+
 
     def _floor_reflect(self, p1, p2, los_crossings):
         k = p2[2] / p1[2]

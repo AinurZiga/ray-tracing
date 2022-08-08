@@ -230,16 +230,16 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments, materials,
     #faces_materials = nb.typed.List.empty_list(nb.float64)
     faces_idxs = nb.typed.List.empty_list(nb.float64)
     for i in range(n_walls):  # walls
-        if i not in [2]:
-            continue
+        #if i not in [6]:   # change
+        #    continue
         cr_p1 = [0.0] * 3
         cr_p2 = [0.0] * 3
         #cr_points = []
         for j in range(faces[i+1]-faces[i]):  # faces
             ind = faces[i] + j
             DR = DRs[ind]
-            D0 = (DR[0] * face_ps[segments[ind+1]][0] + DR[1] * face_ps[segments[ind+1]][1]
-                    + DR[2] * face_ps[segments[ind+1]][2])
+            D0 = (DR[0] * face_ps[segments[ind]][0] + DR[1] * face_ps[segments[ind]][1]
+                    + DR[2] * face_ps[segments[ind]][2])
             #tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DRs[ind][2] * p1[2]
             tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DR[2] * p1[2]
             tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
@@ -249,11 +249,12 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments, materials,
             crossing_p = [0.0] * 3
             for k in range(3):
                 crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
-            if skal(crossing_p, p1, p2) > 0:
+            if skal(crossing_p, p1, p2) > 0.0:
                 continue
             if is_point_inside_figure(crossing_p, DR, 
-                                face_ps[segments[ind]:segments[ind + 1], :], 
-                                face_vs[segments[ind]:segments[ind + 1], :]):
+                                face_ps[segments[ind]:segments[ind+1], :], 
+                                face_vs[segments[ind]:segments[ind+1], :]):
+                #print("cross:", i,j,crossing_p)
                 if not check(pool, np.array(crossing_p)):
                     old_pool = pool[:, :]
                     pool = np.empty((old_pool.shape[0] + 1, old_pool.shape[1]))
@@ -263,10 +264,11 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments, materials,
                         cr_p2 = list(crossing_p)
                         #print("Yes i,j,cr_p2:", i, j, cr_p2)
                         tmp = vec_len(cr_p1, cr_p2)
-                        if tmp > 1.0:
-                            tmp = 1.0
+                        #print("cr1, cr2:", i,j,cr_p1, cr_p2, tmp)
+                        if tmp > 0.3:
+                            tmp = 0.3
                         faces_d.append(tmp)
-                        cr_p1 = [p1[i] - crossing_p[i] for i in range(3)]
+                        cr_p1 = [p1[k] - crossing_p[k] for k in range(3)]
                         theta = np.arccos(skal_mul(cr_p1, DR) / vec_len(p1, crossing_p))
                         if theta > np.pi/2:
                             theta = np.pi - theta
@@ -277,6 +279,7 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments, materials,
                         #break
                     else:
                         cr_p1 = list(crossing_p)
+                        #print("Yes i,j,cr_p1:", i, j, cr_p1)
     res = np.zeros((3, len(faces_d)), dtype=nb.float64) #TODO
     for i in range(len(faces_d)):
         res[0, i] = faces_d[i]
