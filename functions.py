@@ -72,6 +72,8 @@ def open_file(filename):
             #print("i1:", i1)
             material = bin_to_string1(f)
             f.read(302-len(material))
+            if material[:7] == 'Ceiling':
+                material = 'Ceiling'
             """if i1 == 0:
                 material = bin_to_string1(f)
             if i1 == 69:
@@ -287,9 +289,16 @@ def d_crossing_wall(p1, p2, n_walls, faces, segments, materials,
         res[2, i] = faces_idxs[i]
     return res
 
+@nb.njit(cache=True)
+def is_point_inside_figure(p, DR, face_p=np.array([[]]), 
+        face_v=np.array([[]])):
+    if face_p.shape[0] == 4:
+        return _is_point_inside_figure_rect(p, DR, face_p, face_v)
+    else:
+        return _is_point_inside_figure_complex(p, DR, face_p)
     
 @nb.njit(cache=True)
-def is_point_inside_figure(p, DR, face_p=np.array([[]]), face_v=np.array([[]])):
+def _is_point_inside_figure_mid(p, DR, face_p=np.array([[]]), face_v=np.array([[]])):
     #DR = face[0]
     #vc = np.zeros(face_p.shape[0]//2)
     vc = []
@@ -308,7 +317,61 @@ def is_point_inside_figure(p, DR, face_p=np.array([[]]), face_v=np.array([[]])):
         return True
     if case_less(vc):
         return True
-    return False    
+    return False
+
+@nb.njit(cache=True)
+def _is_point_inside_figure_complex(p, DR,
+                            face_p=np.array([[]])):
+    angle = 0.0
+    for i in range(len(face_p)):
+        #vec1 = face_p[i-1] - p
+        #vec2 = face_p[i] - p
+        vec1 = [face_p[i-1, j] - p[j] for j in range(3)]
+        vec2 = [face_p[i, j] - p[j] for j in range(3)]
+        a = np.arccos(dot(vec1, vec2) / (vec_abs(vec1) * vec_abs(vec2)))
+        #if np.cross(vec1, vec2)[2] > 0:
+        #if np.cross(vec1, vec2) @ DR > 0.0:
+        if vect_mul(vec1, vec2, DR) > 0.0:
+            angle += a
+        else:
+            angle -= a
+        #print("complex:", i, a, angle, np.cross(vec1, vec2)[2])
+    #res = np.round(angle/(2*np.pi))
+    res = angle/(2*np.pi)
+    #print(res)
+    #if res == 1 or res == -1:
+    if res > 0.6 or res < -0.6:
+        return True
+    return False
+
+@nb.njit(cache=True)
+def _is_point_inside_figure_rect(p, DR, face_p=np.array([[]]), face_v=np.array([[]])):
+    #tmp1 = np.array(face_p[0, :])
+    AB = face_v[0, :]
+    BC = face_v[1, :]
+    #AM = np.zeros(3)
+    AM = [p[i] - face_p[0, i] for i in range(3)]
+    #BM = p - face_p[1, :]
+    BM = [p[i] - face_p[1, i] for i in range(3)]
+    #return (0 <= AB @ AM <= AB @ AB and 0 <= BC @ BM <= BC @ BC)
+    #if np.dot(AB, AM) < 0:
+    if dot(AB, AM) < 0:
+        return False
+    if dot(AB, AM) > dot(AB, AB):
+        return False
+    if dot(BC, BM) < 0:
+        return False
+    if dot(BC, BM) > dot(BC, BC):
+        return False
+    return True
+
+
+@nb.njit(cache=True)
+def dot(a, b):
+    sum = 0.0
+    for k in range(3):
+        sum += a[k] * b[k]
+    return sum
 
 @nb.njit(cache=True)
 def skal(crossing_p, p1, p2):
@@ -320,6 +383,8 @@ def skal(crossing_p, p1, p2):
 
 @nb.njit(cache=True)
 def vect_mul(AB, AM, DR):
+    """ Cross + dot product
+    """
     vc1 = [0.0] * 3
     vc1[0] = (AB[1] * AM[2] - AM[1] * AB[2]) * DR[0]
     vc1[1] = (AB[0] * AM[2] - AM[0] * AB[2]) * DR[1]

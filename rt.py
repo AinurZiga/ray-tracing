@@ -38,6 +38,9 @@ class Ray_tracing:
 
         self.c = 3*10**8
 
+        self.is_single_bounce = False
+        self.is_double_bounce = False
+
         self._init()
         pass
 
@@ -45,19 +48,19 @@ class Ray_tracing:
         self.dict_materials = {}
         self.dict_materials['Brick'] = 3.75 - 1j * (17.98 * 0.038 / (self.fc/10**9))
         self.dict_materials['Wood'] = 1.99 - 1j * (17.98 * 0.0047 * (self.fc/10**9)**(1.0718-1))
-        self.dict_materials['Ceiling decking']: 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)
+        self.dict_materials['Ceiling']: 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)
         self.dict_materials['Flooring'] = 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)
         self.dict_materials['Metal'] = 3.75 - 1j * (17.98 * 0.038 / self.fc * 10**9)  #TODO
 
     def mimo_rates_help(self, p1):
         p1 = list(p1)
-        p1[2] = 1.0
+        p1[2] += 1.0
         #fc = 5.6 * 10**9
         c = 3 * 10**8
         lamda = c / self.fc
         #p_BS = [54.0, 35.0, 2.5]
         p_rates = []
-        H = self.mimo_channel_matrix_rigorous(self.p_BS, p1)
+        H = self.mimo_channel_matrix(self.p_BS, p1)
         try:
             H = H * lamda / (4*np.pi) * 10**(119/20)
             eig_values, _ = np.linalg.eig(np.dot(H, np.conj(H).T))
@@ -93,7 +96,7 @@ class Ray_tracing:
         if self.type == 'rigorous':
             return self._mimo_channel_matrix_rigorous(p1, p2)
 
-    def _mimo_channel_matrix_rigorous_old(self, p1, p2):
+    """def _mimo_channel_matrix_rigorous_old(self, p1, p2):
         # вернуть полную канальную матрицу
         shift = 82/1000
         H = np.zeros((3,3), dtype=np.complex128)
@@ -106,13 +109,13 @@ class Ray_tracing:
                 cr_points, filter_idx, d_facets = self._image_method(p1_ij, p2_ij)
                 H[i][j] = self._calc_amplitudes(p1, p2, cr_points, d_facets)
         #cr_points, cr_facets, d_facets = self.image_method(p1, p2)
-        return H
+        return H"""
 
     def _mimo_channel_matrix_rigorous(self, p1, p2):
         # вернуть полную канальную матрицу
         shift = 82/1000
         H = np.zeros((3,3), dtype=np.complex128)
-        cr_points, d_facets, filter_idx = self._image_method(p1, p2)
+        #cr_points, d_facets, filter_idx = self._image_method(p1, p2)
         for i in range(3):
             for j in range(3):
                 p1_ij = list(p1)
@@ -121,21 +124,63 @@ class Ray_tracing:
                 p2_ij[0] += shift * (j - 1)
                 #cr_points, filter_idx, d_facets = self._image_method(p1_ij, p2_ij)
                 logging.info("H[i][j]:" + str((i,j)) + '\n')
-                cr_points, d_facets, _ = self._image_method(p1_ij, p2_ij, filter_idx)
-                H[i][j] = self._calc_amplitudes(p1, p2, cr_points, d_facets)
+                if i == 0 and j == 0:
+                    h, idx_walls1, idx_walls2 = self.siso_channel(p1_ij, p2_ij)
+                else:
+                    h, _, _ = self.siso_channel(p1_ij, p2_ij, idx_walls1, idx_walls2)
+                H[i][j] = h
         #cr_points, cr_facets, d_facets = self.image_method(p1, p2)
         return H
+    
+    def siso_channel(self, p1, p2, filter_idx_single_bounce = None, 
+                filter_idx_double_bounce=None):
+        rays1 = 0.0
+        rays2 = 0.0
+        res = 0.0
+        count = 0
+        limit = -25
+        idx_walls1, idx_walls2 = None, None
+        ray0 = self._calc_direct_ray(p1, p2)
+        #print("ray0:", ray0)
+        if self.is_single_bounce:
+            (cr_points1, d_facets1, materials1, type_reflections1, 
+                idx_walls1) = self._image_method(p1, p2, filter_idx_single_bounce)
+            rays1 = self._calc_single_bounce_refl(p1, p2, cr_points1, d_facets1,
+                    materials1, type_reflections1)
+        if self.is_double_bounce:
+            (cr_points2, d_facets2, materials2, type_reflections2, 
+            idx_walls2) = self._image_method_outer_loop(p1, p2, filter_idx_double_bounce)
+            rays2 = self._calc_double_bounce_refl(p1, p2, cr_points2, d_facets2,
+                        materials2, type_reflections2)
+        
+        max_ampl = max(np.abs(ray0), np.max(np.abs(rays1)), np.max(np.abs(rays2)))
+
+        if self.is_single_bounce:
+            idxs1 = np.where(20*np.log10(np.abs(rays1)/max_ampl) > limit)[0]
+            res += np.sum(rays1[idxs1])
+            count += len(idxs1)
+            #print("rays1:", rays1[idxs1])
+            #print("rays1 len:", len(rays1))
+        if self.is_double_bounce:
+            idxs2 = np.where(20*np.log10(np.abs(rays2)/max_ampl) > limit)[0]
+            res += np.sum(rays2[idxs2])
+            count += len(idxs2)
+            #print("rays2:", rays2[idxs2])
+            #print("rays2 len:", len(rays2))
+        if 20*np.log10(np.abs(ray0)/max_ampl) > limit:
+            res += ray0
+            count += 1
+        #res = ray0 + np.sum(rays1[idxs1]) + np.sum(rays2[idxs2])
+        #if filter_idx_single_bounce:
+        print("rays found:", count)
+        return res, idx_walls1, idx_walls2
+
 
     def _calc_amplitudes(self, p1, p2, cr_points, d_facets, reflect_materials, 
                             type_reflections): # deprecated
         c = 3*10**8
         lamda = c / self.fc
-        #k = 2*3.14 / lamda
-        #eta_brick = 3.75 - 1j * (17.98 * 0.038 / 5.6)
-        #eta_wood = 1.99 - 1j * (17.98 * 0.0047 * 5.6**1.0718 / 5.6)
-        #Ampl = 2*lamda / (4*np.pi)  # + antenna gain
         Ampl = 1  # + antenna gain
-        #eta = eta_brick
         D_direct = functions.vec_len(p1, p2)
         ray0 = Ampl * np.exp(-2j*np.pi*self.fc*D_direct/c) / D_direct
         facets_d_theta_mat = self._d_crossing_wall(p1, p2) # needs to return meterials also
@@ -166,19 +211,6 @@ class Ray_tracing:
             tmp1 = sum([(p1[i] - point[i])*(p2[i] - point[i]) for i in range(3)])
             tmp2 = functions.vec_len(p1, point) * functions.vec_len(p2, point)
             theta = np.arccos(tmp1 / tmp2) /2
-            """if i < len(cr_points)-2:
-                # vertical, TE, brick
-                #eta = eta_brick
-                q = 6.28*d/lamda * np.sqrt(eta - np.sin(theta)**2)
-                tmp1 = np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
-                tmp2 = np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
-                R_prime = tmp1 / tmp2
-            else:
-                eta = eta_wood
-                q = 6.28*d/lamda * np.sqrt(eta - np.sin(theta)**2)
-                tmp1 = eta*np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
-                tmp2 = eta*np.cos(theta) + np.sqrt(theta - np.sin(theta)**2)
-                R_prime = tmp1 / tmp2"""
             eta = self.dict_materials[reflect_materials[i]]
             q = 6.28*d/lamda * np.sqrt(eta - np.sin(theta)**2)
             if type_reflections[i] == 'TE':
@@ -278,6 +310,10 @@ class Ray_tracing:
         tmp2 = functions.vec_len(p1, cr_point) * functions.vec_len(p2, cr_point)
         theta = np.arccos(tmp1 / tmp2) /2
         eta = self.dict_materials.get(material)
+        if eta == None:
+            #print("wrong material:", material, len(material)) #TODO
+            eta = self.dict_materials.get('Wood')
+            #raise Exception("Wrong eta")
         q = 6.28*facet_d/lamda * np.sqrt(eta - np.sin(theta)**2)
         if type_reflection == 'TE':
             tmp1 = np.cos(theta) - np.sqrt(theta - np.sin(theta)**2)
@@ -405,7 +441,8 @@ class Ray_tracing:
                     for k in range(len(facet[1])//2):
                         facet_p.append(facet[1][2*k])
                         facet_v.append(facet[1][2*k+1])
-                    if not functions.is_point_inside_figure(C, np.array(facet[0]), np.array(facet_p), np.array(facet_v)):
+                    if not functions.is_point_inside_figure(C, np.array(facet[0]), 
+                            np.array(facet_p), np.array(facet_v)):
                         continue
                     #if i == 71:
                     #    print("YES")
@@ -456,13 +493,38 @@ class Ray_tracing:
                 d_facets.append(0.3)
         #print("cr_points:", len(cr_points), cr_points)
         return cr_points, d_facets, materials, type_reflections, idx_walls
+
+    def _find_cr_points(self, p1, p2):
+        cr_points = []
+        for i in range(self.n_walls):  # walls
+            for j in range(self.facets[i+1]-self.facets[i]):  # faces
+                ind = self.facets[i] + j
+                DR = self.DRs[ind]
+                D0 = (DR[0] * self.facet_ps[self.segments[ind]][0] 
+                        + DR[1] * self.facet_ps[self.segments[ind]][1]
+                        + DR[2] * self.facet_ps[self.segments[ind]][2])
+                tmp1 = D0 - DR[0] * p1[0] - DR[1] * p1[1] - DR[2] * p1[2]
+                tmp2 = DR[0] * (p2[0] - p1[0]) + DR[1] *(p2[1] - p1[1]) + DR[2] * (p2[2] - p1[2])
+                if tmp2 == 0:
+                    continue
+                t0 = tmp1 / tmp2
+                crossing_p = [0.0] * 3
+                for k in range(3):
+                    crossing_p[k] = (p2[k] - p1[k]) * t0 + p1[k]
+                if functions.skal(crossing_p, p1, p2) > 0:
+                    continue
+                if functions.is_point_inside_figure(crossing_p, DR, 
+                                    self.facet_ps[self.segments[ind]:self.segments[ind + 1], :], 
+                                    self.facet_vs[self.segments[ind]:self.segments[ind + 1], :]):
+                    cr_points.append(crossing_p)
+        return cr_points
     
     def _calc_direct_ray(self, p1, p2):
         #ray = 1.0
         dist = functions.vec_len(p1, p2)
         ray = np.exp(-2j*np.pi*self.fc*dist/self.c) / dist
         facets_d_theta_mat = self._d_crossing_wall(p1, p2)
-        print("direct shape:", facets_d_theta_mat.shape)
+        #print("direct shape:", facets_d_theta_mat.shape)
         for j in range(facets_d_theta_mat.shape[1]):
             facet_d = facets_d_theta_mat[0, j]
             facet_theta = facets_d_theta_mat[1, j]
@@ -508,7 +570,7 @@ class Ray_tracing:
             facets_d_theta_mat1 = self._d_crossing_wall(p1, C1)
             facets_d_theta_mat2 = self._d_crossing_wall(p2, C2)
             facets_d_theta_mat = np.hstack((facets_d_theta_mat1, facets_d_theta_mat2))
-            print("refl shape:", facets_d_theta_mat.shape)
+            #print("refl shape:", facets_d_theta_mat.shape)
             for j in range(facets_d_theta_mat.shape[1]):
                 facet_d = facets_d_theta_mat[0, j]
                 facet_theta = facets_d_theta_mat[1, j]
@@ -565,7 +627,7 @@ class Ray_tracing:
             #facets_d_theta_mat2 = self._d_crossing_wall(cr_points[2*i], cr_points[2*i+1])
             #facets_d_theta_mat3 = self._d_crossing_wall(cr_points[2*i+1], p2)
             facets_d_theta_mat = np.hstack((facets_d_theta_mat1, facets_d_theta_mat2, facets_d_theta_mat3))
-            print("2 bounce shape:", facets_d_theta_mat.shape)
+            #print("2 bounce shape:", facets_d_theta_mat.shape)
             for j in range(facets_d_theta_mat.shape[1]):
                 facet_d = facets_d_theta_mat[0, j]
                 facet_theta = facets_d_theta_mat[1, j]
@@ -608,6 +670,14 @@ class Ray_tracing:
         if los1 + los2 <= los_crossings+1:
             return C
         return None
+
+    """def _is_point_inside_figure(self, p, DR, face_p, face_v):
+        if face_p.shape[0] == 4:
+            return functions.is_point_inside_figure_rect(p, DR, face_p, face_v)
+        elif face_p.shape[0] <= 10:
+            return functions.is_point_inside_figure(p, DR, face_p, face_v)
+        else:
+            return functions.is_point_inside_figure_complex(p, DR, face_p)"""
 
     def _d_crossing_wall(self, p1, p2):
         return functions.d_crossing_wall(p1, p2, self.n_walls, self.facets, self.segments, 
@@ -661,7 +731,7 @@ def fun(f, q_in, q_out):
         q_out.put((i, f(x)))
 
 
-def parmap(f, X, nprocs=multiprocessing.cpu_count()-2):
+def parmap(f, X, nprocs=multiprocessing.cpu_count()-1):
     q_in = multiprocessing.Queue(1)
     q_out = multiprocessing.Queue()
     #print(nprocs)

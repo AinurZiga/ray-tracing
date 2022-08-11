@@ -9,7 +9,6 @@ import os
 import sys
 import timeit
 import operator
-#import values5 as values
 import functions
 import rt
 import math
@@ -30,10 +29,6 @@ class Window(QtWidgets.QMainWindow):
         self.width = 800
         self.height = 600
         self.zoom = 0
-        #self.showMaximized()
-        #self.showFullScreen()
-        #self.resized.connect(self.move_legend)
-        #values.initVar("WIFi.log")
         self.InitWindow()
 
     def resizeEvent(self, event):
@@ -671,6 +666,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         return data_items
 
     def hide_get_map_points(self):
+        return
         self.analyse_points_hide()
         [item.hide() for item in self.power_items]
         [item.hide() for item in self.rate_items]
@@ -886,13 +882,16 @@ class GraphicsView(QtWidgets.QGraphicsView):
     def task1(self, filename):  # open map
         print('task1')
         #self.mode = 'task1'
+        self.filename_in = filename
         self.init_done = True
         self.access_points = []
         self.users = []
         self.vesx = 30
         self.vesy = 30
 
-        self.analyse_points, self.walls_list, self.materials = functions.open_file(filename)
+        (self.analyse_points, self.walls_list, 
+                self.materials) = functions.open_file(filename)
+        return
         #self.walls_list = [self.walls_list[25]]
         #print('walls:', len(self.walls_list))
         #self.draw_walls()
@@ -938,10 +937,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #self.draw_p1_p2([p1, p2])
         
         #return
-        import viewer_main
-        viewer_main.main_fun(self)
+        #import viewer_main
+        #import sys.argv[0] as viewer_main
+        #viewer_main.main_fun(self)
 
-        return
+        #return
         fc = 5.6*10**9
         n_walls, faces, segments, DRs, face_ps, face_vs = functions.walls_to_arrays(self.walls_list)
         
@@ -1040,7 +1040,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         #line_direct = self.scene.addLine(self.vesy*p1[1], -self.vesx*p1[0],
         #        self.vesy*p2[1], -self.vesx*p2[0], self.redPen)
         print("filter_idxs:", filter_idxs)
-        self.draw_direct_line(p1,p2)
+        #self.draw_direct_line(p1,p2)
         for i, point in enumerate(cr_points):
             if filter_idxs != None and i not in filter_idxs:
                 continue
@@ -1119,8 +1119,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         print('draw walls')
         #print(self.walls_list)
         for i in range(len(self.walls_list)):
-            #if filter_idx and i not in filter_idx:  # change
-            #    continue
+            if filter_idx and i not in filter_idx:  # change
+                continue
             floor_edge = self.walls_list[i][0][1]
             #print(i, abs(floor_edge[0][0] - floor_edge[4][0]) + 
             #                abs(floor_edge[0][1] - floor_edge[4][1]))
@@ -1136,11 +1136,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
             pol.setZValue(5)
             self.scene.addItem(pol)
             pol.set_poly(points)
-            if filter_idx and i not in filter_idx:  # change
+            #if filter_idx and i not in filter_idx:  # change
                 #continue
-                pol.setPen(QtGui.QPen(self.color_window, self.thick_window+2))
-            else:
-                pol.setPen(QtGui.QPen(self.color_wall, self.thick_wall))
+            #    pol.setPen(QtGui.QPen(self.color_window, self.thick_window+2))
+            #else:
+            pol.setPen(QtGui.QPen(self.color_wall, self.thick_wall))
             pol.setPolygon(QtGui.QPolygonF(points))
             self.scene_pols.append(pol)
             """if i == 0:

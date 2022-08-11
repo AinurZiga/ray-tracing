@@ -25,4 +25,7 @@ ray_tracing = rt.Ray_tracing(p1, walls, materials,
 cr_points, d_facets, materials, type_reflections, idx_walls = ray_tracing._image_method(p1,p2)
 
 #print(d_facets, idx_walls)
-assert idx_walls == [0, 6, 20, 35, 42]
+#assert idx_walls == [0, 6, 20, 35, 42], print(idx_walls)
+
+assert idx_walls == [0, 0, 2, 5, 6, 12, 13, 16, 18, 19, 20, 29, 30, 
+                31, 32, 35, 36, 37, 41, 42, 43, 44, 69, 70], print(idx_walls)

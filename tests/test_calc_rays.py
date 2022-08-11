@@ -47,8 +47,8 @@ rays1 = ray_tracing._calc_single_bounce_refl(p1, p2, cr_points1, d_facets1,
 #rays2 = ray_tracing._calc_double_bounce_refl(p1, p2, cr_points2, d_facets2,
 #            materials2, type_reflections2)
 
-#max_ampl = max(np.abs(ray0), np.max(np.abs(rays1)))
-max_ampl = np.abs(ray0)
+max_ampl = max(np.abs(ray0), np.max(np.abs(rays1)))
+#max_ampl = np.abs(ray0)
 #print(np.abs((ray0, rays1)/max_ampl))
 
 print(20*np.log10(np.abs(rays1)/max_ampl))

@@ -21,4 +21,6 @@ ray_tracing = rt.Ray_tracing(p1, walls, materials,
 
 (cr_points2, d_facets, materials, type_reflections, 
         idx_walls) = ray_tracing._image_method_outer_loop(p1, p2)
-print(cr_points2[:4])
+print(cr_points2[4], len(cr_points2))
+
+assert len(cr_points2) == 608, print(len(cr_points2))
