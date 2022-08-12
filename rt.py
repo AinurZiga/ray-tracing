@@ -7,6 +7,8 @@ import functions
 import logging
 logging.basicConfig(filename='./logs/rt.log', filemode='w',level=logging.INFO)
 
+log = logging.getLogger(__name__)
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -123,7 +125,7 @@ class Ray_tracing:
                 p2_ij = list(p2)
                 p2_ij[0] += shift * (j - 1)
                 #cr_points, filter_idx, d_facets = self._image_method(p1_ij, p2_ij)
-                logging.info("H[i][j]:" + str((i,j)) + '\n')
+                log.info("H[i][j]:" + str((i,j)) + '\n')
                 if i == 0 and j == 0:
                     h, idx_walls1, idx_walls2 = self.siso_channel(p1_ij, p2_ij)
                 else:
@@ -184,7 +186,7 @@ class Ray_tracing:
         D_direct = functions.vec_len(p1, p2)
         ray0 = Ampl * np.exp(-2j*np.pi*self.fc*D_direct/c) / D_direct
         facets_d_theta_mat = self._d_crossing_wall(p1, p2) # needs to return meterials also
-        logging.info("facets_d_theta:" +str(facets_d_theta_mat))
+        log.info("facets_d_theta:" +str(facets_d_theta_mat))
         #print("facets_d_theta:", facets_d_theta)
         for i in range(facets_d_theta_mat.shape[1]):
             facet_d = facets_d_theta_mat[0, i]
@@ -202,9 +204,9 @@ class Ray_tracing:
             tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
             T = tmp3 / tmp2
             ray0 = ray0 * T
-            logging.info('Direct ray wall passes i, T: ' + str((i, np.abs(T))) + '\n')
+            log.info('Direct ray wall passes i, T: ' + str((i, np.abs(T))) + '\n')
         rays = ray0
-        logging.info('Direct ray0: ' + str(np.abs(ray0))+ '\n')
+        log.info('Direct ray0: ' + str(np.abs(ray0))+ '\n')
 
         for i, point in enumerate(cr_points):
             d = d_facets[i]
@@ -254,9 +256,9 @@ class Ray_tracing:
                 tmp3 = (1 - R_prime**2)*(np.exp(-1j*q))
                 T = tmp3 / tmp2
                 ray = ray * T     
-                logging.info('Reflection and pass i,j,T: ' + str((i,j,np.abs(T))) + '\n')   
+                log.info('Reflection and pass i,j,T: ' + str((i,j,np.abs(T))) + '\n')   
             rays += ray
-            logging.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
+            log.info('Reflections d_refl, theta, R, tau, ray: ' + str((d,theta*57.3, 
                     np.abs(R), tau*10**6, np.abs(ray))) + '\n')
         return rays
     
@@ -479,7 +481,7 @@ class Ray_tracing:
                             type_reflections.append('TM')
                         count += 1
                         #print("cr_points:", i,j, C)
-                        logging.info("Found reflection i,j,C:" + str((i,j, C)))
+                        log.info("Found reflection i,j,C:" + str((i,j, C)))
         #print("cr_points:", cr_points)
         if self.is_floor_reflection:
             C = self._floor_reflect(p1, p2)

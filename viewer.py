@@ -13,8 +13,8 @@ import functions
 import rt
 import math
 import local_eng as local
-import logging
-logging.basicConfig(filename='./logs/planner.log', filemode='w',level=logging.INFO)
+#import logging
+#logging.basicConfig(filename='./logs/planner.log', filemode='w',level=logging.INFO)
 
 class Window(QtWidgets.QMainWindow):
 
