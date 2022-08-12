@@ -1,11 +1,6 @@
-# ray-tracing
+# Ray-tracing
 Ray-tracing deterministic model
 
-### Requirements
-- Python 3.10.5
-- PySide2 5.15.5
-- NumPy 1.22.4
-- Numba 0.55.2
 
 ### Supported features
 1. Image method for finding reflected rays
@@ -17,3 +12,9 @@ Ray-tracing deterministic model
 
 Code snippets are available in the folder /examples.
 
+
+### Not supported (in development)
+1. OpenStreetMap for the outdoor scenarios.
+2. Diffuse scattering.
+3. Diffraction.
+4. Different types of polarization. Only vertical polarisation is available so far.
